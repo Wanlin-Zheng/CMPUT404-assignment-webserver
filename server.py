@@ -28,11 +28,84 @@ import socketserver
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
-    
+
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+        #handle empty bytearray
+        if self.data == b"":
+            responseCode = 'HTTP/1.1 404 Not Found\r\n'
+            header = "Content-Type: text/html/css\r\n Connection: close\r\n\r\n"
+            response = responseCode + header + "<html><body>Error 404: Page not found</body></html> "
+            self.request.sendall(bytearray(response, "utf-8"))
+            return
+    
+        #parse request
+        data = self.data.decode("utf-8")
+        data = data.split()
+
+        #send method not allowed error 405
+        if data[0] != "GET":
+            print("SENDING 405 \n")
+            responseCode = 'HTTP/1.1 405 Not Method Not Allowed\r\n'
+            header = "Content-Type: text/html\r\n Connection: close\r\n\r\n"
+            response = responseCode + header + "<html><body>Error 405: Method Not allowed</body></html> "
+            self.request.sendall(bytearray(response, "utf-8"))
+            return
+
+        # initialize variables
+        filePath = ""
+        contentType = ""
+        response = bytearray("OK","utf-8")
+
+        #handle css requests 
+        if data[1] == "/base.css":
+            filePath = "www/base.css"
+            contentType = "Content-Type: text/css\r\n"
+        elif data[1] == "/deep/deep.css":
+            filePath = "www/deep/deep.css"
+            contentType = "Content-Type: text/css\r\n"
+        #handle 301 redirect cases
+        elif data[1] == "/deep" or data[1] == "www/deep" :
+            responseCode = "HTTP/1.0 301 Moved Permanently\r\n"
+            header = "Location: http://127.0.0.1:8080/deep/"
+            response = responseCode + header
+            self.request.sendall(bytearray(response, "utf-8"))
+            return
+        else:
+            if data[1][-10:] == "index.html":
+                filePath = "www" + data[1]
+            else:
+                filePath = "www" + data[1] + "index.html"
+            contentType = "Content-Type: text/html\r\n"
+
+        if filePath != "":
+            try:
+                responseCode = "HTTP/1.0 200 OK\r\n"
+                header = contentType + "Connection: close\r\n\r\n"
+                response = responseCode + header
+                #read html
+                file = open(filePath,"r")
+                for line in file:
+                    response = response + line
+
+                self.request.sendall(bytearray(response, "utf-8"))
+            except FileNotFoundError: # send 404
+                responseCode = 'HTTP/1.1 404 Not Found\r\n'
+                header = "Content-Type: text/html/\r\n Connection: close\r\n\r\n"
+                response = responseCode + header + "Error 404: Page not found"
+                self.request.sendall(bytearray(response, "utf-8"))
+            except NotADirectoryError:# send 404 
+                responseCode = 'HTTP/1.1 404 Not Found\r\n'
+                header = "Content-Type: text/html/\r\n Connection: close\r\n\r\n"
+                response = responseCode + header + "Error 404: Page not found"
+                self.request.sendall(bytearray(response, "utf-8"))
+        else: # send 404
+            responseCode = 'HTTP/1.1 404 Not Found\r\n'
+            header = "Content-Type: text/html/\r\n Connection: close\r\n\r\n"
+            response = responseCode + header + "Error 404: Page not found"
+            self.request.sendall(bytearray(response, "utf-8"))
+
+        
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
